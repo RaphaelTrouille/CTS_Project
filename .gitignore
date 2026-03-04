@@ -1,0 +1,5 @@
+data/
+functions/analysis/
+*.asv
+.DS_Store
+
