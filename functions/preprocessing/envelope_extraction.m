@@ -1,5 +1,5 @@
-function enveloppe = enveloppe_extraction(audio_struct, center_frequencies)
-% ENVELOPPE_EXTRACTION  Compute the auditory envelope of a speech signal
+function envelope = envelope_extraction(audio_struct, center_frequencies)
+% ENVELOPE_EXTRACTION  Compute the auditory envelope of a speech signal
 %                       using a gammatone filterbank.
 %
 % DESCRIPTION:
@@ -43,7 +43,7 @@ function enveloppe = enveloppe_extraction(audio_struct, center_frequencies)
     
     Fs = audio_struct.Fs;
     signal = audio_struct.signal;
-    enveloppe = zeros(size(signal));
+    envelope = zeros(size(signal));
     
     for freq = 1:length(center_frequencies)
         % Design gannatone filter for this frequency channel
@@ -65,6 +65,6 @@ function enveloppe = enveloppe_extraction(audio_struct, center_frequencies)
         Yf = conv(abs(Yf), kern, 'same');
 
         % Power-law compression (0.6 exponent) + accumulate across channels
-        enveloppe = enveloppe + Yf.^0.6;
+        envelope = envelope + Yf.^0.6;
     end
 end

@@ -1,12 +1,9 @@
-% --- Auto-config du Path ---
-scriptPath = fileparts(mfilename('fullpath')); % Trouve où est ce script
+%% 0. ENVIRONMENT & CONFIGURATION
+% -------------------------------------------------------------------------
+scriptPath = fileparts(mfilename('fullpath'));
 if ~exist('setup_environment', 'file')
-    % Si MATLAB ne trouve pas la config, on va la chercher au cran au-dessus
-    addpath(fullfile(scriptPath, '..')); % Ajoute le dossier parent (racine du projet)
+    addpath(fullfile(scriptPath, '..'));
 end
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
-% -------------------------------------------------------------------------
 
 [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment();
 
