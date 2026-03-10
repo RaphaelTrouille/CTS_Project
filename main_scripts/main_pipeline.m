@@ -10,15 +10,14 @@
 %   1. Subject loop
 %      ├── Exclusion check
 %      ├── Output path & skip logic
-%      └── Trial loop (per video)
+%   2. └── Trial loop (per video)
 %           ├── A. Data loading & MEG/audio alignment
 %           ├── B. Preprocessing (bandpass, reref, artifact rejection, zscore)
 %           ├── C. Reference signal construction
 %           └── D. Condition loop → analysis dispatch
 %                ├── Coherence
 %                ├── TRF
-%                ├── ERP
-%                └── Beamforming
+%                └── ERP
 %
 % TO ADD A NEW ANALYSIS:
 %   1. Add cfg.analysis.my_analysis = true/false in config.m
@@ -68,9 +67,8 @@ for perm_stat = perm_passes
 
         % -----------------------------------------------------------------
         % 1.2 OUTPUT PATH & SKIP LOGIC
-        % -----------------------------------------------------------------
-        
-        mat_path = fullfile(deriv, 'results', sub_name);
+        % -----------------------------------------------------------------        
+        mat_path  = fullfile(deriv, 'results', sub_name);
         if ~exist(mat_path, 'dir'), mkdir(mat_path); end
 
         suffix    = iif(perm_stat, '_perm', '_main');
@@ -86,6 +84,161 @@ for perm_stat = perm_passes
         % -----------------------------------------------------------------
         % 1.3 LOCATE SUBJECT NEURO DATA FOLDER (hendles dated subfolders)
         % -----------------------------------------------------------------
+        subfold_root = fullfile(meg_dir, sub_name);
+        date         = dir(fullfile(subfold_root, '2*'));
+        if isempty(date_dir)
+            subfold  = subfold_root;
+        else
+            subfold  = fullfile(subfold_root, date(1).name);
+            log_msg(cfg, '  [INFO] Dated subfolder found, using root: %s. \n', subfold);
+        end
+        
+        % -----------------------------------------------------------------
+        % 1.4 GET STIMULUS SET ORDER & VIDEO LIST
+        % -----------------------------------------------------------------
+        try
+            [set, order, vids] = get_set_order_vids(subfold, cfg.expected_trials);
+        catch err
+            log_msg(cfg, '  [WARNING] Could not retrieve set/order/vids: %s\n', err.message);
+            failed_subs{end+1} = sub_name;
+        end
 
+        CMall = [];
+
+        %% 2. TRIAL LOOP
+        % =================================================================
+        for n_vid = 1:length(vids)
+            log_msg(cfg, '  > Trial %d/%d (vid %d)\n', n_vid, length(vids), vids(n_vid));
+
+            subj_files = get_subject_files(subfold, snd_dir, sub_name, set, order, n_vid);
+
+            % Check that MEG file exists before going further
+            if ~exist(subj_files.meg_file, 'file')
+                log_msg(cfg, '  [WARNING] MEG file not found: %s - skipping trial. \n', subj_files.meg_file);
+                continue
+            end
+
+            % Retrieve trial timings and condition flags
+            [t, vid_en_inSiN, t_dis] = get_vid_timings(order, vids(n_vid));
+
+            %% A. DATA LOADING & ALIGNMENT
+            % -------------------------------------------------------------
+            Yglb     = load_WAV_audio(subj_files.snd_global);
+            MISCorig = load_MISC(subj_files.meg_file, perm_label);
+
+            % Sanity check: audio duration must match theoretical timings
+            if abs(t(end) - length(Yglb.signal) / Yglb.Fs) > 0.1
+                log_msg(cfg, '  [WARNING] Audio/timing mismatch for vid%d - skipping trial. \n', vids(n_vid));
+                continue
+            end
+
+            % Align MEG and audio (load cached result availbale)
+            [dec, tds] = realign_sound_file(subj_files.sync_file, MISCorig, Yglb);
+            
+            % Verify and log alignment quality
+            [t1, t2, L, gof_val] = alignement_verification(tds, dec, MISCorig, Yglb, perm_label, false);
+            gof(n_sub, n_vid) = gof_val;
+            if ~perm_stat && ~isempty(gof_val) && gof_val < 0.5
+                log_msg(cfg, '  [WARNING] Poor alignment (gof=%.2f) for vid%d.\n', gof_val, vids(n_vid));
+            end
+
+            %% B. REFERENCE SIGNAL CONTRUCTION
+            % -------------------------------------------------------------
+            CM = init_CM(MISCorig.Fs, cfg.cm.quantum, cfg.cm.window_type);
+
+            for i = 1:size(cfg.ref_sources, 1)
+                ref_label    = cfg.ref_sources{i, 1};
+                ref_type     = cfg.ref_sources{i, 2};
+                ref_file_key = cfg.ref_sources{i, 3};
+            
+                % Build envelope / motor signal
+                switch ref_type
+    
+                    case 'audio'
+                        wav = load_WAV_audio(subj_files.(ref_file_key));
+                        Yp  = envelope_extraction(wav, cf);
+    
+                    case 'lips'
+                        att_wav = load_WAV_audio(subj_files.snd_att);
+                        Yp = lips_apperture(vid_dir, vids(n_vid), att_wav);
+
+                    case 'envelope'
+                        % Pre-computed low-frequency signal - add loading
+                        % logic here
+                        log_msg(cfg, '  [WARNING] Envelope source "%s" needs custom loading - skipping.\n', ref_label);
+                        continue
+                    
+                    otherwise
+                        log_msg(cfg, '  [WARNING] Unknown ref type "‰s" - skipping.\n')
+                        continue
+                end
+            
+
+                % Align and downsample to MEG rate
+                MISC = downsample_signal(Yp, tds, t1, t2, size(MISCorig.signal));
+    
+                % Permute if in surrogate mode
+                if perm_state
+                    MISC = permute_signal_segments(MISC, MISCorig.fs);
+                end
+    
+                CM = add_CM_ref(CM, ref_label, MISC);
+
+            end % references loop
+            
+            clear Yglb Yp MISC % Free memory - no longer needed
+            
+            %% C. MEG METADATA & ARTEFACT MASK
+            % -------------------------------------------------------------
+            % % prepare_CM_data sets CM.infile, CM.Fs, CM.first_samp,
+            % CM.last_samp — everything CM_coh_MEG_ref_one_pass needs
+            % to read the raw data itself. It also builds the bad mask.
+            [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file, cfg, MISCorig.Fs);
+
+            % Flag distractor/singing segments as artefacts
+            bad = flag_distractor_segments(bad, t_dis, tds, dec, MISCorig.Fs);
+
+            %% D. CONDITION LOOP -> ANALYSIS DISPATCH
+            % -------------------------------------------------------------
+
+            for n_cond = 1:length(cfg.conditions)
+                cond   = cfg.conditions(n_cond);
+                n_t    = find(~any(bsxfun(@minus, cond.target, vid_en_in_SiN)));
+                if isempty(n_t)
+                    continue % This condition is not present in the current trial
+                end
+
+                log_msg(cfg, '  Condition %d: %s (%d windows)\n', n_cond, cond.label, length(n_t));
+            
+                % Set analysis time window (absolute sample indices)
+                CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
+                CM.tfin = CM.first_samp + min(dec + t(n_t) * MISCorig.Fs, ...
+                                               CM.last_samp - CM.first_samp);
+                % -------------------------------------------------------------                                           CM.last_samp - CM.first_samp);
+                % ANALYSIS DISPATCH
+                % To add a new analysis: implement run_X(CM, bad, cfg) below
+                % and add an elseif block here.
+                % -------------------------------------------------------------
+                
+                CMresult = [];
+    
+                if cfg.analysis.coherence && cfg.space.sensor
+                    CMresult = run_coherence_sensor(CM, bad, cfg);
+                
+                else
+                    log_msg(cfg, '  [WARNING] No active analysis matched - check config.m\n');
+                    continue
+                end
+    
+                if isempty(CMresult), continue; end
+    
+                % Accumulate results across trials
+                if  isempty(CMall) || size(CMall, 2) < n_cond
+                    CMall(n_cond) = CMresult;
+                else
+                    CMall(n_cond) = CM_combine_results(CMall(n_cond), CMresult);
+                end
+            end % conds loop
+        end  % trials loop 
     end  % subjects loop
 end  % perm loop

@@ -44,25 +44,35 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
 % -------------------------------------------------------------------------
 
     [~, ~, extension] = fileparts(file);
+
+    % Store file path - required by CM_coh_MEG/EEG_ref_one_pass
+    CM.infile = file;
+
     
     % Format detection and data loading
     if strcmp(extension, '.cnt')
-        % --- EEG: FieldTrip preprocessing ---
-        cfg         = [];
-        cfg.dataset = file;
+        % --- EEG: read metadata via FieldTrip ---
+        ft_cfg         = [];
+        ft_cfg.dataset = file;
         data = ft_preprocessing(cfg);
         Fs = double(data.fsample);
-        % Define analysis window with temporal offset
-        tdeb = data.sampleinfo(1) + max(dec, 0);
-        tfin = min(tdeb + L - round(2*Fs), data.sampleinfo(2));
+        
+        % Store timing metadata
+        CM.Fs         = Fs;
+        CM.first_samp = data.sampleinfo(1);
+        CM.last_samp  = data.sampleinfo(2);
+        
+        % Define analysis window boundaries
+        tdeb = CM.first_samp + max(dec, 0);
+        tfin = min(tdeb + L - round(2*Fs), CM.last_samp);
     
-        % --- Artefact mask: flag flat pre/post-analysis margins ---
+        % --- Artefact mask: flag pre/post-analysis margins ---
         bad = zeros(1, length(data.trial{1}));
         bad(1:min(end, tdeb)) = 1;
         bad(max(1, tfin):end) = 1;
     
         % --- Artefact mask: flag flat (dead) channels ---
-        bad(max(data.trial{1}(1:256,:),[],1) == 0) = 1;
+        bad(max(data.trial{1}(1:256,:), [], 1) == 0) = 1;
     
         % --- Smooth artefact mask with a 2s buffer on each side ---
         bad = double(conv(double(bad), ones(1, round(2*Fs)), 'same') > 0.5);
@@ -74,16 +84,16 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
         % --- Populate CM structure ---
         CM.picksMEEG = 1:256;
         CM.label = data.label;
-        CM.infile = file;
     
     elseif strcmp(extension, '.fif')
-        % --- MEG: MNE/FieldTrip FIFF routines ---
+        % --- MEG: read metadata via FIFF routines ---
         raw = fiff_setup_read_raw(file);
         Fs = double(raw.info.sfreq);
-    
-        % Define analysis window with temporal offset
-        tdeb = double(raw.first_samp) + max(dec, 0);
-        tfin = min(tdeb+L, double(raw.last_samp));
+        
+        % Store timing metadata
+        CM.Fs         = Fs;
+        CM.first_samp = double(raw.first_samp);
+        CM.last_samp  = double(raw.last_samp);
     
         % Read bad channel mask from dedicated 'bad' channel
         bad = fiff_read_raw_segment(raw, 0, inf, ...
@@ -91,9 +101,8 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
     
         % --- Populate CM structure ---
         sensors     = get_sensors(raw);
-        CM.CSD      = [];   % Placeholder for Current Source Density
         CM.label    = raw.info.ch_names(sensors.picksMEG);
-        CM.infile   = file;
+        CM.CSD      = [];   % Placeholder for Current Source Density
     
     else
         error('prepare_CM_data: Unsupported file format "%s". Expected .fif or .cnt.', extension)

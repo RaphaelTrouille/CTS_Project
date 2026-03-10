@@ -1,4 +1,4 @@
-function files = get_subject_files(sub_fold, snd_dir, sub_name, set_order, n_vid)
+function files = get_subject_files(sub_fold, snd_dir, sub_name, set, order, n_vid)
 % GET_SUBJECT_FILES  Build file paths for all data sources associated with
 %                    a given subject and video stimulus.
 %
@@ -24,7 +24,7 @@ function files = get_subject_files(sub_fold, snd_dir, sub_name, set_order, n_vid
 %              .snd_global  : path to the global (mixed) audio WAV file
 %              .snd_noise   : path to the noise WAV file
 %              .meg_file    : path to the preprocessed MEG .fif file
-%              .syncfile    : path to the MEG/audio synchronization .mat file
+%              .sync_file    : path to the MEG/audio synchronization .mat file
 %
 % FILE NAMING CONVENTIONS:
 %   Audio  : '<id>_att.wav', '<id>_global.wav', '<id>_noise.wav'
@@ -42,6 +42,7 @@ function files = get_subject_files(sub_fold, snd_dir, sub_name, set_order, n_vid
 % -------------------------------------------------------------------------
 
     % Build trial identifier from set order and video number
+    set_order = ['set' num2str(set) '_order' num2str(order)];
     id_vid = [set_order '_vid' num2str(n_vid)];
     files.id = id_vid;
 
@@ -62,6 +63,6 @@ function files = get_subject_files(sub_fold, snd_dir, sub_name, set_order, n_vid
 
     % Build MEG and synchronization file paths from subject folder
     files.meg_file = fullfile(sub_fold, [sub_name '_' id_vid '_tsss_mc_ica.fif']);
-    files.syncfile = fullfile(sub_fold, [sub_name '_' id_vid '_meg_sound_sync.mat']);
+    files.sync_file = fullfile(sub_fold, [sub_name '_' id_vid '_meg_sound_sync.mat']);
     
 end

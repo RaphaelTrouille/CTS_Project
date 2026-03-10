@@ -37,7 +37,7 @@ for perm_stat = 0:1
         save_file = fullfile(mat_path, [sub_name suffix '.mat']);
 
         % Retrieve subject's and sound folders and payed set, order, and vids
-        subfold_no_date = fullfile(meg_dir,subjects(n_sub).name);
+        subfold_no_date = fullfile(meg_dir,sub_name);
         date = dir(fullfile(subfold_no_date,'2*'));
         subfold =  fullfile(meg_dir,subjects(n_sub).name,date.name);
 

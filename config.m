@@ -44,7 +44,7 @@ cfg.subjects.exclude_diagnosis = {  % Diagnostic / IQ concerns - will be skipped
 % type options:
 %   'audio'     -> envelope extracted automatically via
 %   envelope_extraction()
-%   'motor'     -> lip aperture signal from video landmarks (lips_apperture())
+%   'lips'      -> lip aperture signal from video landmarks (lips_apperture())
 %   'envelope'  -> signal already in low-frequency format, used as-is
 % 
 % file_key options (for 'audio' type):
@@ -57,30 +57,30 @@ cfg.ref_sources = {
     'global sound',      'audio',   'snd_global';
     'attended speech',   'audio',   'snd_att';
 %   'noise',             'audio',   'snd_noise';    % uncomment to include
-    'mouth aperture',    'motor',   ''
+    'mouth aperture',    'lips',    ''
 };
 
 %% 6. PREPROCESSING OPTIONS
 % -------------------------------------------------------------------------
 
 % --- Bandpass filter (applied to MEG/EEG signal before analysis) ---
-cfg.preproc.bandpass.do         = true;
+cfg.preproc.bandpass.do         = false;
 cfg.preproc.bandpass.freq_low   = 1;     % High-pass cutoff (Hz)
 cfg.preproc.bandpass.freq_high  = 40;    % Low-pass cutoff (Hz)
 cfg.preproc.bandpass.trans_low  = 0.5;   % Transition bandwidth low (Hz)
 cfg.preproc.bandpass.trans_high = 5;     % Transition bandwidth high (Hz)
 
 % --- EEG rereferencing (only applied to .cnt files) ---
-cfg.preproc.reref.do            = true;
+cfg.preproc.reref.do            = false;
 cfg.preproc.reref.type          = 'average';  % 'average' | 'linked_mastoids' | 'none'
 
 % --- Artifact rejection (amplitude threshold) ---
-cfg.preproc.artifact.do         = true;
+cfg.preproc.artifact.do         = false;
 cfg.preproc.artifact.threshold  = 3000e-15;  % Amplitude threshold (T for MEG, V for EEG)
 cfg.preproc.artifact.margin_sec = 0.2;       % Margin around detected artifacts (seconds)
 
 % --- Z-score normalisation (applied per channel before analysis) ---
-cfg.preproc.zscore.do           = true;
+cfg.preproc.zscore.do           = false;
 cfg.preproc.zscore.baseline_sec = [];    % [] = use full signal; [t1 t2] = baseline window
 
 %% 7. CM / COHERENCE PARAMETERS

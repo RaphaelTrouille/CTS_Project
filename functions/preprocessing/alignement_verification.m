@@ -1,5 +1,5 @@
-function [t1, t2, L, gof] = allignement_verification(tds, dec, MISC_struct, audio_struct, perm_stat, do_plot)
-% ALLIGNEMENT_VERIFICATION  Verify the temporal alignment between a MEG signal
+function [t1, t2, L, gof] = alignement_verification(tds, dec, MISC_struct, audio_struct, perm_stat, do_plot)
+% ALIGNEMENT_VERIFICATION    Verify the temporal alignment between a MEG signal
 %                            and a downsampled audio signal.
 %
 % DESCRIPTION:
@@ -42,7 +42,7 @@ function [t1, t2, L, gof] = allignement_verification(tds, dec, MISC_struct, audi
 %   - cosine_filter.m (custom function, must be on MATLAB path)
 %
 % USAGE:
-%   [t1, t2, L, gof] = allignement_verification(tds, 0, MISC_struct, audio_struct, false, true);
+%   [t1, t2, L, gof] = alignement_verification(tds, 0, MISC_struct, audio_struct, false, true);
 %
 % -------------------------------------------------------------------------    
     % Discard downsampling indices that exceed the audio signal length
