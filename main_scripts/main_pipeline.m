@@ -12,12 +12,13 @@
 %      ├── Output path & skip logic
 %   2. └── Trial loop (per video)
 %           ├── A. Data loading & MEG/audio alignment
-%           ├── B. Preprocessing (bandpass, reref, artifact rejection, zscore)
-%           ├── C. Reference signal construction
+%           ├── B. Reference signal construction
+%           ├── C. MEG metadata & artefact mask
 %           └── D. Condition loop → analysis dispatch
 %                ├── Coherence
 %                ├── TRF
 %                └── ERP
+%   3. Summary & Save the results
 %
 % TO ADD A NEW ANALYSIS:
 %   1. Add cfg.analysis.my_analysis = true/false in config.m
@@ -193,6 +194,7 @@ for perm_stat = perm_passes
             % % prepare_CM_data sets CM.infile, CM.Fs, CM.first_samp,
             % CM.last_samp — everything CM_coh_MEG_ref_one_pass needs
             % to read the raw data itself. It also builds the bad mask.
+
             [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file, cfg, MISCorig.Fs);
 
             % Flag distractor/singing segments as artefacts
@@ -204,6 +206,7 @@ for perm_stat = perm_passes
             for n_cond = 1:length(cfg.conditions)
                 cond   = cfg.conditions(n_cond);
                 n_t    = find(~any(bsxfun(@minus, cond.target, vid_en_in_SiN)));
+                
                 if isempty(n_t)
                     continue % This condition is not present in the current trial
                 end
@@ -214,16 +217,20 @@ for perm_stat = perm_passes
                 CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
                 CM.tfin = CM.first_samp + min(dec + t(n_t) * MISCorig.Fs, ...
                                                CM.last_samp - CM.first_samp);
-                % -------------------------------------------------------------                                           CM.last_samp - CM.first_samp);
+
+                % ---------------------------------------------------------                                           CM.last_samp - CM.first_samp);
                 % ANALYSIS DISPATCH
                 % To add a new analysis: implement run_X(CM, bad, cfg) below
                 % and add an elseif block here.
-                % -------------------------------------------------------------
+                % ---------------------------------------------------------
                 
                 CMresult = [];
     
                 if cfg.analysis.coherence && cfg.space.sensor
                     CMresult = run_coherence_sensor(CM, bad, cfg);
+
+                elseif cfg.analysis.coherence && cfg.space.source
+                    CMresults = run_coherence_source(CM, bad, cfg);
                 
                 else
                     log_msg(cfg, '  [WARNING] No active analysis matched - check config.m\n');
@@ -233,12 +240,48 @@ for perm_stat = perm_passes
                 if isempty(CMresult), continue; end
     
                 % Accumulate results across trials
-                if  isempty(CMall) || size(CMall, 2) < n_cond
+                if  isempty(CMall(n_cond).nave) || size(CMall, 2) < n_cond
                     CMall(n_cond) = CMresult;
                 else
                     CMall(n_cond) = CM_combine_results(CMall(n_cond), CMresult);
                 end
             end % conds loop
-        end  % trials loop 
+        end  % trials loop
+
+        %% 3. SAVE RESULTS
+        % -----------------------------------------------------------------
+        % Extract surrogate statistics from CMall before saving.
+            % CM_coh_MEG_ref_one_pass stores surrogate results in CMall.surrog
+            % when CM.surrog is defined. Here we pull them out into a separate
+            % array (surrog) indexed by [condition x trial], and clear them
+            % from CMall to keep the saved file compact.
+            surrog = [];
+            if isfield(CMall(1), 'surrog')
+                for s1 = 1:size(CMall, 1)
+                    for s2 = 1:size(CMall, 2)
+                        surrog(s1, s2) = CMall(s1, s2).surrog;
+                        CMall(s1, s2).surrog = [];
+                    end
+                end
+            end
+
+        if ~isempty(CMall)
+            gof_align = gof(n_sub, :);
+            save(save_file, 'CMall', 'gof_align', 'surrog', 'cfg');
+            log_msg(cfg, '[SAVED] %s\n', save_file);
+        else
+            log_msg(cfg, '  [WARNING] CMall is empty - nothing saved for %s.\n', sub_name);
+        end
+
+        elapsed = toc;
+        log_msg(cfg, '  Done in %.1f sec.\n', elapsed);
+
     end  % subjects loop
 end  % perm loop
+
+% Summary 
+if ~isempty(failed_subs)
+    fprintf('\n[SUMMARY] %d subject(s) failed:\n', length(failed_subs));
+    fprintf('  - %s\n', failed_subs{:});
+end
+fprintf('\n[DONE] Pipeline complete.\n')
