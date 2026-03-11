@@ -30,13 +30,8 @@
 
 %% 0. ENVIRONMENT & CONFIGURATION
 % -------------------------------------------------------------------------
-scriptPath = fileparts(mfilename("fullpath"));
-if ~exist('setup_environment.m', 'file')
-    addpath(fullfile(scriptPath, '..'));
-end
-
 [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment();
-config;     % Loads cfg struct - edit config.m to change all parameters
+cfg = cts_config();     % Loads cfg struct - edit config.m to change all parameters
 
 % Pre-compute MEL center frequencies (shared across all subjects/trials)
 cf = get_mel_freqs(cfg.freq.mel_low, cfg.freq.mel_high, cfg.freq.mel_bands);
@@ -69,14 +64,14 @@ for perm_stat = perm_passes
         % -----------------------------------------------------------------
         % 1.2 OUTPUT PATH & SKIP LOGIC
         % -----------------------------------------------------------------        
-        mat_path  = fullfile(deriv, 'results', sub_name);
+        mat_path  = fullfile(deriv_dir, 'results', sub_name);
         if ~exist(mat_path, 'dir'), mkdir(mat_path); end
 
         suffix    = iif(perm_stat, '_perm', '_main');
         save_file = fullfile(mat_path, [sub_name '_CTS_results' suffix '.mat']);
 
         if ~cfg.overwrite_results && exist(save_file, 'file')
-            log_msg(cfg, '%s [SKIP] %s - result filealready exists.\n', perm_label, sub_name)
+            log_msg(cfg, '%s [SKIP] %s - result file already exists.\n', perm_label, sub_name)
             continue
         end
 
@@ -87,7 +82,7 @@ for perm_stat = perm_passes
         % -----------------------------------------------------------------
         subfold_root = fullfile(meg_dir, sub_name);
         date         = dir(fullfile(subfold_root, '2*'));
-        if isempty(date_dir)
+        if isempty(date)
             subfold  = subfold_root;
         else
             subfold  = fullfile(subfold_root, date(1).name);
@@ -111,7 +106,7 @@ for perm_stat = perm_passes
         for n_vid = 1:length(vids)
             log_msg(cfg, '  > Trial %d/%d (vid %d)\n', n_vid, length(vids), vids(n_vid));
 
-            subj_files = get_subject_files(subfold, snd_dir, sub_name, set, order, n_vid);
+            subj_files = get_subject_files(subfold, snd_dir, sub_name, set, order, vids(n_vid));
 
             % Check that MEG file exists before going further
             if ~exist(subj_files.meg_file, 'file')
@@ -120,7 +115,7 @@ for perm_stat = perm_passes
             end
 
             % Retrieve trial timings and condition flags
-            [t, vid_en_inSiN, t_dis] = get_vid_timings(order, vids(n_vid));
+            [t, vid_en_in_SiN, t_dis] = get_vid_timings(order, vids(n_vid));
 
             %% A. DATA LOADING & ALIGNMENT
             % -------------------------------------------------------------
@@ -137,7 +132,7 @@ for perm_stat = perm_passes
             [dec, tds] = realign_sound_file(subj_files.sync_file, MISCorig, Yglb);
             
             % Verify and log alignment quality
-            [t1, t2, L, gof_val] = alignement_verification(tds, dec, MISCorig, Yglb, perm_label, false);
+            [t1, t2, L, gof_val] = alignement_verification(tds, dec, MISCorig, Yglb, perm_stat, false);
             gof(n_sub, n_vid) = gof_val;
 
             if ~perm_stat && ~isempty(gof_val) && gof_val < 0.5
@@ -161,8 +156,8 @@ for perm_stat = perm_passes
                         Yp  = envelope_extraction(wav, cf);
     
                     case 'lips'
-                        att_wav = load_WAV_audio(subj_files.snd_att);
-                        Yp = lips_apperture(vid_dir, vids(n_vid), att_wav);
+                        wav = load_WAV_audio(subj_files.snd_att);
+                        Yp = lips_apperture(vid_dir, vids(n_vid), wav);
 
                     case 'envelope'
                         % Pre-computed low-frequency signal - add loading
@@ -171,7 +166,7 @@ for perm_stat = perm_passes
                         continue
                     
                     otherwise
-                        log_msg(cfg, '  [WARNING] Unknown ref type "‰s" - skipping.\n')
+                        log_msg(cfg, '  [WARNING] Unknown ref type "%s" - skipping.\n')
                         continue
                 end
             
@@ -180,7 +175,7 @@ for perm_stat = perm_passes
                 MISC = downsample_signal(Yp, tds, t1, t2, size(MISCorig.signal));
     
                 % Permute if in surrogate mode
-                if perm_state
+                if perm_stat
                     MISC = permute_signal_segments(MISC, MISCorig.fs);
                 end
     
@@ -188,7 +183,7 @@ for perm_stat = perm_passes
 
             end % references loop
             
-            clear Yglb Yp MISC % Free memory - no longer needed
+            clear Yglb MISC Yp wav % Free memory - no longer needed
             
             %% C. MEG METADATA & ARTEFACT MASK
             % -------------------------------------------------------------
@@ -196,7 +191,7 @@ for perm_stat = perm_passes
             % CM.last_samp — everything CM_coh_MEG_ref_one_pass needs
             % to read the raw data itself. It also builds the bad mask.
 
-            [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file, cfg, MISCorig.Fs);
+            [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file);
 
             % Flag distractor/singing segments as artefacts
             bad = flag_distractor_segments(bad, t_dis, tds, dec, MISCorig.Fs);
@@ -209,7 +204,7 @@ for perm_stat = perm_passes
                 n_t    = find(~any(bsxfun(@minus, cond.target, vid_en_in_SiN)));
                 
                 if isempty(n_t)
-                    log_msg(cfg, '  [INFO] Condition %d: ‰s not found in the trial: vid%d',...
+                    log_msg(cfg, '  [INFO] Condition %d: %s not found in the trial: vid%d\n',...
                             n_cond, cond.label, vids(n_vid));
                     continue % This condition is not present in the current trial
                 end
@@ -218,7 +213,7 @@ for perm_stat = perm_passes
             
                 % Set analysis time window (absolute sample indices)
                 CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
-                CM.tfin = CM.first_samp + min(dec + t(n_t) * MISCorig.Fs, ...
+                CM.tfin = CM.first_samp + min(dec + t(n_t+1) * MISCorig.Fs, ...
                                                CM.last_samp - CM.first_samp);
 
                 % ---------------------------------------------------------                                           CM.last_samp - CM.first_samp);
@@ -244,14 +239,9 @@ for perm_stat = perm_passes
                     continue
                 end
     
-                if isempty(CMresult), continue; end
+                if isempty(CMall), continue; end
     
-                % Accumulate results across trials
-                if  isempty(CMall(n_cond).nave) || size(CMall, 2) < n_cond
-                    CMall(n_cond) = CMresult;
-                else
-                    CMall(n_cond) = CM_combine_results(CMall(n_cond), CMresult);
-                end
+   
             end % conds loop
         end  % trials loop
 

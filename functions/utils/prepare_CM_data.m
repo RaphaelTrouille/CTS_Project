@@ -36,7 +36,7 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
 %   - fiff_setup_read_raw     (MNE/FieldTrip)
 %   - fiff_read_raw_segment   (MNE/FieldTrip)
 %   - fiff_pick_channels      (MNE/FieldTrip)
-%   - get_sensors.m           (custom, must be on MATLAB path)
+%   - get_sensors.m           (Cartographie motrice)
 %
 % USAGE:
 %   [CM, bad] = prepare_CM_data(CM, dec, L, 'path/to/data.fif');
@@ -54,7 +54,7 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
         % --- EEG: read metadata via FieldTrip ---
         ft_cfg         = [];
         ft_cfg.dataset = file;
-        data = ft_preprocessing(cfg);
+        data = ft_preprocessing(ft_cfg);
         Fs = double(data.fsample);
         
         % Store timing metadata

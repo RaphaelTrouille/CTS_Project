@@ -29,7 +29,7 @@ function MISC = load_MISC(file, perm_stat)
 % DEPENDENCIES:
 %   - fiff_setup_read_raw, fiff_pick_channels, fiff_read_raw_segment (MNE/FieldTrip)
 %   - ft_preprocessing (FieldTrip)
-%   - get_sensors.m (custom function, must be on MATLAB path)
+%   - get_sensors.m (cartographie_motrice)
 %
 % USAGE:
 %   MISC = load_MISC('path/to/recording.fif', false);
@@ -73,7 +73,7 @@ elseif strcmp(extension, '.cnt')
         MISC.signal = data.trial{1}(picks_misc, :);
     end
 else
-    error('File type not supported: should be .fif or .cnt')
+    error('File type not supported: should be .fif or .cnt');
 end
 
 % Ensure signal is a row vector

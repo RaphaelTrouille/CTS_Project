@@ -1,4 +1,4 @@
-function files = get_subject_files(sub_fold, snd_dir, sub_name, set, order, n_vid)
+function files = get_subject_files(sub_fold, snd_dir, sub_name, set, order, vid)
 % GET_SUBJECT_FILES  Build file paths for all data sources associated with
 %                    a given subject and video stimulus.
 %
@@ -43,7 +43,7 @@ function files = get_subject_files(sub_fold, snd_dir, sub_name, set, order, n_vi
 
     % Build trial identifier from set order and video number
     set_order = ['set' num2str(set) '_order' num2str(order)];
-    id_vid = [set_order '_vid' num2str(n_vid)];
+    id_vid = [set_order '_vid' num2str(vid)];
     files.id = id_vid;
 
     % Recursively search for the attended WAV file to locate the audio

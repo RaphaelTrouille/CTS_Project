@@ -1,9 +1,17 @@
-% =========================================================================
-% CONFIG.M — Central configuration for the SpeechTrack CTS pipeline
-% =========================================================================
-% This is the ONLY file you need to edit between runs.
-% All analysis parameters, subject lists, preprocessing options, and
-% pipeline flags are defined here.
+function cfg = cts_config()
+% CTS_CONFIG  Return the central configuration structure for the
+%             SpeechTrack CTS pipeline.
+%
+% DESCRIPTION:
+%   This is the ONLY file you need to edit between runs.
+%   All analysis parameters, subject lists, preprocessing options,
+%   and pipeline flags are defined here.
+%
+% OUTPUT:
+%   cfg  - Configuration structure (see sections below for all fields)
+%
+% USAGE:
+%   cfg = cts_config();
 %
 % =========================================================================
 
@@ -120,7 +128,7 @@ cfg.freq.align_bp   = [50 330]; % Bandpass range used for alignment verification
 % noise flags: 0 = clean  |  1 = noise
 
 cfg.conditions(1).label  = 'video, clean';
-cfg.conditions(1).target = [1; 0; 0; 0];
+cfg.conditions(1).target = [0; 0; 0; 1];
 
 cfg.conditions(2).label  = 'video, noise';
 cfg.conditions(2).target = [1; 1; 1; 1];

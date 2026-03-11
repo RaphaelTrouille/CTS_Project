@@ -58,7 +58,7 @@ for perm_stat = 0:1
              % try
              for n_vid = 1:length(vids) % loop over the different trials: video1, video2 and audio only
                  % retrieve file names (meg, eeg & sound)
-                subj_files = get_subject_files(subfold, snd_dir, sub_name, set_order, n_vid);
+                subj_files = get_subject_files(subfold, snd_dir, sub_name, set, order, n_vid);
         %         infos = get_subject_files(meg_dir, sub_name, n_vid);
         % 
         % 
@@ -103,10 +103,10 @@ for perm_stat = 0:1
                     MISCorig = load_MISC(subj_files.meg_file, perm_stat);
                     
                     % realign the sound files
-                    [dec, tds] = realign_sound_file(subj_files.syncfile, MISCorig, Yglb);
+                    [dec, tds] = realign_sound_file(subj_files.sync_file, MISCorig, Yglb);
                     
                     % verification
-                    [t1, t2, L, gof(n_sub, n_vid)] = allignement_verification(tds, dec, MISCorig, Yglb, perm_stat, false);
+                    [t1, t2, L, gof(n_sub, n_vid)] = alignement_verification(tds, dec, MISCorig, Yglb, perm_stat, false);
                     
                     % init CM struct
                     CM = init_CM(MISCorig.Fs, 2, 'boxcar');
@@ -131,7 +131,7 @@ for perm_stat = 0:1
                     for i = 1:length(ref_sources)
                         % Extract enveloppe only if it is audio signal
                         if isstruct(ref_sources(i).data) && isfield(ref_sources(i).data, 'signal')
-                            Yp = enveloppe_extraction(ref_sources(i).data, cf);
+                            Yp = envelope_extraction(ref_sources(i).data, cf);
                         else
                             Yp = ref_sources(i).data;       % Already low frequency signal (enveloppe/mouvement)
                         end
@@ -160,7 +160,7 @@ for perm_stat = 0:1
                     
 
                     % Filter out bad
-                    [CM, bad] = prepare_CM_data(CM, dec, L, megfile);
+                    [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file);
                     
                     % remove time points during which the actor was singing
                     

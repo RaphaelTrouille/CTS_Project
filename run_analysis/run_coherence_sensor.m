@@ -82,12 +82,16 @@ function CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg)
     end
     
     %% 5. ACCUMULATE INTO CMall
-    if isempty(CMall) || size(CMall, 2) < n_cond
-        % First trial for this condition - initialise
-        CMall(n_cond) = CMresult;
+    if (n_vid == 1 && n_cond == 1) || (isempty(CMall) && n_cond == 1)
+        CMall = CMresult;
     else
-        % Subsequent trials - merge with existing results
-        CMall(n_cond) = CM_combine_results(CMall(n_cond), CMresult);
+        if size(CMall, 2) >= n_cond
+            % merge
+            CMall(n_cond) = CM_combine_results(CMall(n_cond),CMresult);
+        else
+            % make new row 
+            CMall(n_cond) = CMresult;
+        end
     end
 end
 

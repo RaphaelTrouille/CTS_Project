@@ -41,8 +41,7 @@ function [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment()
     project_root = fileparts(mfilename('fullpath'));
     
     % 2. Add functions/methods/scripts relative to the path
-    addpath(genpath(fullfile(project_root, 'functions')));
-    addpath(fullfile(project_root, 'main_scripts'));
+    addpath(genpath(project_root));
     
     % 3. Toolboxes
     % Absolute path to change according to your environment
@@ -84,7 +83,7 @@ function [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment()
     meg_dir = fullfile(external_root, 'meg');
     snd_dir = fullfile(external_root, 'ready_stim');
     vid_dir = fullfile(external_root, 'clean_vids');
-    deriv_dir = fullfile(project_root, 'data', 'raw', 'meg');
+    deriv_dir = fullfile(project_root, 'data', 'derivatives', 'coherence');
     
     if ~exist(meg_dir, 'dir')
         warning('MEG data folder not found: %s', meg_dir);

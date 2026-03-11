@@ -47,6 +47,7 @@ function [t1, t2, L, gof] = alignement_verification(tds, dec, MISC_struct, audio
 % -------------------------------------------------------------------------    
     % Discard downsampling indices that exceed the audio signal length
     tds = tds(tds<length(audio_struct.signal));
+    gof = [];   % Default: not computed (e.g. during permutation testing)
 
     % Bandpass filter the MEG-rate signal (50 - 330 Hz)
     F_h_x = cosine_filter(length(MISC_struct.signal),...

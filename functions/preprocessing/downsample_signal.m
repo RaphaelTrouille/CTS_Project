@@ -28,6 +28,6 @@ function MISC = downsample_signal(envelope, tds, t1, t2, target_size)
     Yds = envelope(tds);
     
     % Insert into a zero-padded output array using index mapping
-    MISC = zeros(size(target_size));
+    MISC = zeros(target_size);
     MISC(t1) = Yds(t2);
 end
