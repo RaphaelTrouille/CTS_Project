@@ -89,6 +89,20 @@ cfg.cm.quantum      = 2;        % Analysis window half-length (seconds)
 cfg.cm.window_type  = 'boxcar'; % Spectral window ('boxcar', 'hanning', 'hamming')
 cfg.cm.freq_max     = 20;       % Maximum frequency of interest for CM.Find (Hz)
 
+% --- Epoch count equalisation across conditions ---
+% Set equalize_nave to true if trial durations differ between conditions
+% and you want to match the number of epochs used in each.
+% equalize_vids: M x 2 matrix [vid_index, threshold_cond]
+%   threshold > 0 : equalise when n_cond <= threshold
+%   threshold < 0 : equalise when n_cond > abs(threshold)
+% n_rm: vector (1 x Ncond) of epochs to remove per condition
+cfg.cm.equalize_nave  = false;
+cfg.cm.n_rm           = [];      % e.g. round(mean(nave(:,:,1:47),3)-330)'
+cfg.cm.equalize_vids  = [2,  4;  % vid2: equalise if n_cond <= 4
+                         3, -4]; % vid3: equalise if n_cond > 4
+
+
+
 %% 11. FREQUENCY PARAMETERS (envelope extraction)
 % -------------------------------------------------------------------------
 cfg.freq.mel_low    = 150;      % MEL filterbank lower bound (Hz)

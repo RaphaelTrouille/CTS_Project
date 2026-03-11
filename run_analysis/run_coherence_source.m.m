@@ -1,0 +1,1 @@
+function CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg)

@@ -125,7 +125,7 @@ for perm_stat = perm_passes
             %% A. DATA LOADING & ALIGNMENT
             % -------------------------------------------------------------
             Yglb     = load_WAV_audio(subj_files.snd_global);
-            MISCorig = load_MISC(subj_files.meg_file, perm_label);
+            MISCorig = load_MISC(subj_files.meg_file, perm_stat);
 
             % Sanity check: audio duration must match theoretical timings
             if abs(t(end) - length(Yglb.signal) / Yglb.Fs) > 0.1
@@ -139,6 +139,7 @@ for perm_stat = perm_passes
             % Verify and log alignment quality
             [t1, t2, L, gof_val] = alignement_verification(tds, dec, MISCorig, Yglb, perm_label, false);
             gof(n_sub, n_vid) = gof_val;
+
             if ~perm_stat && ~isempty(gof_val) && gof_val < 0.5
                 log_msg(cfg, '  [WARNING] Poor alignment (gof=%.2f) for vid%d.\n', gof_val, vids(n_vid));
             end
@@ -208,6 +209,8 @@ for perm_stat = perm_passes
                 n_t    = find(~any(bsxfun(@minus, cond.target, vid_en_in_SiN)));
                 
                 if isempty(n_t)
+                    log_msg(cfg, '  [INFO] Condition %d: ‰s not found in the trial: vid%d',...
+                            n_cond, cond.label, vids(n_vid));
                     continue % This condition is not present in the current trial
                 end
 
@@ -227,10 +230,14 @@ for perm_stat = perm_passes
                 CMresult = [];
     
                 if cfg.analysis.coherence && cfg.space.sensor
-                    CMresult = run_coherence_sensor(CM, bad, cfg);
+                    CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg);
 
                 elseif cfg.analysis.coherence && cfg.space.source
-                    CMresults = run_coherence_source(CM, bad, cfg);
+                    % TODO
+                    continue
+
+                elseif cfg.analysis.TRF && cfg.space.source
+                    % TODO
                 
                 else
                     log_msg(cfg, '  [WARNING] No active analysis matched - check config.m\n');
@@ -255,6 +262,13 @@ for perm_stat = perm_passes
             % when CM.surrog is defined. Here we pull them out into a separate
             % array (surrog) indexed by [condition x trial], and clear them
             % from CMall to keep the saved file compact.
+        if ~isempty(CMall)
+
+            % Extract surrogate statistics from CMall before saving.
+            % CM_coh_MEG_ref_one_pass stores surrogate results in CMall.surrog
+            % when CM.surrog is defined. Here we pull them out into a separate
+            % array (surrog) indexed by [condition x trial], and clear them
+            % from CMall to keep the saved file compact.
             surrog = [];
             if isfield(CMall(1), 'surrog')
                 for s1 = 1:size(CMall, 1)
@@ -265,12 +279,11 @@ for perm_stat = perm_passes
                 end
             end
 
-        if ~isempty(CMall)
             gof_align = gof(n_sub, :);
-            save(save_file, 'CMall', 'gof_align', 'surrog', 'cfg');
-            log_msg(cfg, '[SAVED] %s\n', save_file);
+            save(save_file, 'CMall', 'surrog', 'gof_align', 'cfg');
+            log_msg(cfg, '  [SAVED] %s\n', save_file);
         else
-            log_msg(cfg, '  [WARNING] CMall is empty - nothing saved for %s.\n', sub_name);
+            log_msg(cfg, '  [WARNING] CMall is empty — nothing saved for %s.\n', sub_name);
         end
 
         elapsed = toc;
