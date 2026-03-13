@@ -292,7 +292,7 @@ for perm_stat = perm_passes
         % TRF ANALYSIS - computed once per subject after all trials are stacked
         if cfg.analysis.TRF && cfg.space.sensor && ~isempty(trf_buf.meg_files)
             log_msg(cfg, '  [TRF] Runningforward TRF sensor for %s...\n', sub_name);
-            CMfwd = run_TRF_sensor(trf_buf, sub_name, perm_stat, cfg);
+            CMfwd = run_TRF_sensor(trf_buf, cfg);
         else
             CMfwd = [];
         end

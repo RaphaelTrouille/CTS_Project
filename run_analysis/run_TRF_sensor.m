@@ -121,14 +121,22 @@ for n_deb = 1:length(deb)
     speak_time(deb(n_deb):fin(n_deb)) = 0;
 end
 
-%% 4. FORWARD TRF - CROSS-VALIDATION LOOP
+%% 4. SENSOR GROUPS
+picksleft  = cat(1, sensors.left*2-1, sensors.left*2);
+picksleft  = picksleft(:)';
+picksright = cat(1, sensors.right*2-1, sensors.right*2);
+picksright = picksright(:)';
+
+side_map   = struct('left', picksleft, 'right', picksright, 'both', 1:size(data,1)); 
+
+%% 5. FORWARD TRF - CROSS-VALIDATION LOOP
 
 refs_keep = cfg.trf.refs_keep;
 CMfwd     = [];
 
 for n_type = 1:length(cfg.trf.freq_bands)
-    band = cfg.trf.freq_bands(n_type);
-    log_msg(cfg, '  [TRF] Band %d/%d: %s\n', n_type, length(cfg.trf.freq_bands), band.label);
+    band = cfg.trf.fwd_bands(n_type);
+    log_msg(cfg, '  [TRF] Band %d/%d: %s\n', n_type, length(cfg.trf.fwd_bands), band.label);
 
     % Build CM template for this frequency band
     CMtemp              = [];
@@ -157,42 +165,76 @@ for n_type = 1:length(cfg.trf.freq_bands)
 
     for n_set = 1:n_folds
         
-        % Training set: exclude current fold + unassigned (cond_in == 0)
+        % TRAINING SET: exclude current fold + unassigned (cond_in == 0)
         this_bad_train = bad;
+
         for n_cond = [0 n_set]
             this_bad_train(cond_ind == n_cond) = 1;
         end
-
         % Expand clean segments with 4s buffer on each side
-        tmp = diff([1 this_bad_train 1]);
-        tdebs = find(tmp == -1);
-        tfins = find(tmp == 1) - 1;
+        tmp     = diff([1 this_bad_train 1]);
+        tdebs   = find(tmp == -1);
+        tfins   = find(tmp == 1) - 1;
+        to_keep = zeros(size(bad));
+        for n = 1:length(tdebs)
+            to_keep(max(tdebs(n) - 4*Fs, 1) : min(tfins(n) + 4*Fs, length(bad))) = 1;
+        end      
+        to_keep_train = find(to_keep);
+
+        % TESTING SET on the data from the current set
+        this_bad_test = bad;
+        cond_not_in_set = 1:10;
+        cond_not_in_set(cfg.trf.cond_sets{n_set}) = [];
+        for n_cond = [0 cond_not_in_set]
+            this_bad_test(cond_ind == n_cond) = 1;
+        end
+        tmp     = diff([1 this_bad_test 1]);
+        tdebs   = find(tmp == -1);
+        tfins   = find(tmp == 1) - 1;
         to_keep = zeros(size(bad));
         for n = 1:length(tdebs)
             to_keep(max(tdebs(n) - 4*Fs, 1) : min(tfins(n) + 4*Fs, length(bad))) = 1;
         end
-        to_keep_train = find(to_keep);
+        to_keep_test = find(to_keep);
 
-        % Train
-        this_CM = CMtemp;
-        for n_ref = 1:length(CMtemp.ref)
-            this_CM.ref(n_ref).chan = CMtemp.ref(n_ref).chan(:, to_keep_train);
-        end
-        this_CM.ref = this_CM.ref(n_ref).chan(:, to_keep_train);
-        this_CM     = CM_TRF_MEEG_train(this_CM, ...
-                                        this_bad_train(to_keep_train), ...
-                                        data(1:size(data,1), to_keep_train));
-        this_CM =rmfield(this_CM, {'ref' 'tdeb' 'tfin'});
+        for n_side = 1:length(cfg.trf.sides)
+            side_label = cfg.trf.sides{n_side};
+            picks      = side_map.(side_label);
+            
+            % Train
+            this_CM = CMtemp;
+            
+            for n_ref = 1:length(CMtemp.ref)
+                this_CM.ref(n_ref).chan = CMtemp.ref(n_ref).chan(:, to_keep_train);
+            end
+            this_CM.ref = this_CM.ref(refs_keep);
 
-        % Test TO DO
+            this_CM     = CM_TRF_MEEG_train(this_CM, ...
+                                            this_bad_train(to_keep_train), ...
+                                            data(picks, to_keep_train));
+            
+            % Test QUESTION
+            this_CM = rmfield(this_CM, {'tdeb' 'tfin'});
 
+            this_idx = 0
+            for n_ref = refs_keep
+                this_idx = this_idx + 1;
+                this_CM.ref(this_idx).chan = CMtemp.ref(n_ref).chan(:, to_keep_test);
+            end
+            if broad phrasal label -> 
+                ones
+            else
+                maskspeech
+            end
+    
+    
+            if n_set == 1 && n_type == 1 && n_side == 1
+                CMfwd = this_CM;
+            else
+                CMfwd(n_set, n_type, n_side) = this_CM;
+            end
+        end  % n_side
         
-        if n_set == 1 && n_type == 1
-            CMfwd = this_CM;
-        else
-            CMfwd(n_set, n_type) = this_CM;
-        end
-
         log_msg(cfg, '  fold %d/%d done\n', n_set, n_folds);
 
     end  % n_set

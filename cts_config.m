@@ -113,10 +113,13 @@ cfg.cm.equalize_vids  = [2,  4;  % vid2: equalise if n_cond <= 4
 % -------------------------------------------------------------------------
 cfg.trf.n_folds       = 10;
 cfg.trf.refs_keep     = [1 2 3 4];
-cfg.trf.att_ref_index = 2;
+
+cfg.trf.att_ref_index = find(strcmp(cfg.ref_sources(:,1), 'attended speech'));
 
 cfg.trf.cond_sets = {[1 2] [3 4] [5 6] [7 8] [9 10] ...
                      [1 3] [2 4] [5 7] [6 8] [9 10]};
+
+cfg.trf.sides = {'left', 'right', 'both'};  % possible subsets ('left', 'right', 'both')
 
 % Forward TRF bands — columns: label | band | width | ds | t_pre | t_post | t_buff | lambda
 trf_fwd = {
