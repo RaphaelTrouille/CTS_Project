@@ -20,8 +20,8 @@ function cfg = cts_config()
 % Enable one or more analysis types. Each enabled analysis will run in
 % sequence for every subject/trial/condition.
 
-cfg.analysis.coherence  = true;     % Cortical coherence (CM toolbox)
-cfg.analysis.TRF        = false;    % Temporal Response Function (mTRF toolbox)
+cfg.analysis.coherence  = false;     % Cortical coherence (CM toolbox)
+cfg.analysis.TRF        = true;    % Temporal Response Function (mTRF toolbox)
 cfg.analysis.ERP        = false;    % Event-Related Potential / Evoked response
 
 %% 2. ANALYSIS SPACE
@@ -172,26 +172,35 @@ cfg.freq.align_bp   = [50 330]; % Bandpass range used for alignment verification
 % Each condition is defined by a label and a target vector encoding
 % the experimental state: [visual_type; noise_block1; noise_block2; noise_block3]
 %
-% visual_type: 1 = video  |  2 = audio-only  |  3 = picture
-% noise flags: 0 = clean  |  1 = noise
+% Video | Energy | Info | SiN
 
 cfg.conditions(1).label  = 'video, clean';
 cfg.conditions(1).target = [0; 0; 0; 1];
 
 cfg.conditions(2).label  = 'video, noise';
-cfg.conditions(2).target = [1; 1; 1; 1];
+cfg.conditions(2).target = [1; 0; 0; 1];
 
 cfg.conditions(3).label  = 'picture, clean';
-cfg.conditions(3).target = [3; 0; 0; 0];
+cfg.conditions(3).target = [0; 1; 0; 1];
 
 cfg.conditions(4).label  = 'picture, noise';
-cfg.conditions(4).target = [3; 1; 1; 1];
+cfg.conditions(4).target = [1; 1; 0; 1];
 
 cfg.conditions(5).label  = 'audio-only, clean';
-cfg.conditions(5).target = [2; 0; 0; 0];
+cfg.conditions(5).target = [0; 0; 1; 1];
 
 cfg.conditions(6).label  = 'audio-only, noise';
-cfg.conditions(6).target = [2; 1; 1; 1];
+cfg.conditions(6).target = [1; 0; 1; 1];
+
+cfg.conditions(7).label  = 'audio-only, noise';
+cfg.conditions(7).target = [0; 1; 1; 1];
+
+cfg.conditions(8).label  = 'audio-only, noise';
+cfg.conditions(8).target = [1; 1; 1; 1];
+
+cfg.conditions(9).label  = 'audio-only, noise';
+cfg.conditions(9).target = [0; 0; 0; 0];
+
 
 %% . PIPELINE BEHAVIOUR
 % -------------------------------------------------------------------------

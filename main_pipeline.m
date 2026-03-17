@@ -257,12 +257,7 @@ for perm_stat = perm_passes
                     continue % This condition is not present in the current trial
                 end
 
-                log_msg(cfg, '  Condition %d: %s (%d windows)\n', n_cond, cond.label, length(n_t));
-            
-                % Set analysis time window (absolute sample indices)
-                CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
-                CM.tfin = CM.first_samp + min(dec + t(n_t+1) * MISCorig.Fs, ...
-                                               CM.last_samp - CM.first_samp);
+                log_msg(cfg, '  Condition %d: %s (%d windows)\n', n_cond, cond.label, length(n_t));            
 
                 % ---------------------------------------------------------
                 % ANALYSIS DISPATCH
@@ -270,9 +265,12 @@ for perm_stat = perm_passes
                 % and add an elseif block here.
                 % ---------------------------------------------------------
                 
-                
                 % COHERENCE ANALYSIS
                 if cfg.analysis.coherence && cfg.space.sensor
+                % Set analysis time window (absolute sample indices)
+                    CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
+                    CM.tfin = CM.first_samp + min(dec + t(n_t+1) * MISCorig.Fs, ...
+                                                  CM.last_samp - CM.first_samp);
                     CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg);
                     if cfg.space.source
                         run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg);
@@ -282,11 +280,9 @@ for perm_stat = perm_passes
                     log_msg(cfg, '  [WARNING] No active analysis matched - check config.m\n');
                     continue
                 end
-    
-                if isempty(CMall), continue; end
-    
    
             end % conds loop
+   
         end  % trials loop
 
         % TRF ANALYSIS - computed once per subject after all trials are stacked

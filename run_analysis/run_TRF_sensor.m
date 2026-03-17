@@ -25,7 +25,7 @@ function CMfwd = run_TRF_sensor(trf_buf, cfg)
 %                 .sensors    : sensors struct from get_sensors (last trial)
 %                 .Fs         : MEG sampling rate (Hz)
 %   cfg       - Pipeline config struct. Relevant fields:
-%                 .trf.freq_bands     : struct array with fields:
+%                 .trf.fwd_bands      : struct array with fields:
 %                                         .label   : e.g. 'phrasal', 'syllabic'
 %                                         .band    : [flo fhi] Hz
 %                                         .width   : [flo fhi] transition Hz
@@ -158,7 +158,7 @@ for n_type = 1:length(cfg.trf.freq_bands)
         sig = sig - mean(sig);
         sig = sig / max(std(sig));
         CMtemp.ref(n_ref).chan = sig;
-        CMtemp.ref(n_ref).info = trf_but.refs{1}(n_ref).info;
+        CMtemp.ref(n_ref).info = trf_buf.refs{1}(n_ref).info;
         CMtemp.ref(n_ref).filt = [];
         CMtemp.ref(n_ref).norm = 0;
     end
@@ -167,66 +167,52 @@ for n_type = 1:length(cfg.trf.freq_bands)
         
         % TRAINING SET: exclude current fold + unassigned (cond_in == 0)
         this_bad_train = bad;
-
-        for n_cond = [0 n_set]
-            this_bad_train(cond_ind == n_cond) = 1;
-        end
+        this_bad_train(cond_ind == n_set | cond_ind == 0) = 1;
         % Expand clean segments with 4s buffer on each side
-        tmp     = diff([1 this_bad_train 1]);
-        tdebs   = find(tmp == -1);
-        tfins   = find(tmp == 1) - 1;
-        to_keep = zeros(size(bad));
-        for n = 1:length(tdebs)
-            to_keep(max(tdebs(n) - 4*Fs, 1) : min(tfins(n) + 4*Fs, length(bad))) = 1;
-        end      
-        to_keep_train = find(to_keep);
+        to_keep_train  = get_clean_indices(this_bad_train, Fs);
+
 
         % TESTING SET on the data from the current set
         this_bad_test = bad;
-        cond_not_in_set = 1:10;
-        cond_not_in_set(cfg.trf.cond_sets{n_set}) = [];
-        for n_cond = [0 cond_not_in_set]
-            this_bad_test(cond_ind == n_cond) = 1;
-        end
-        tmp     = diff([1 this_bad_test 1]);
-        tdebs   = find(tmp == -1);
-        tfins   = find(tmp == 1) - 1;
-        to_keep = zeros(size(bad));
-        for n = 1:length(tdebs)
-            to_keep(max(tdebs(n) - 4*Fs, 1) : min(tfins(n) + 4*Fs, length(bad))) = 1;
-        end
-        to_keep_test = find(to_keep);
+        cond_to_test  = cfg.trf.cond_sets{n_set};
+        this_bad_test(~ismember(cond_ind, cond_to_test)) = 1;
+        to_keep_test  = get_clean_indices(this_bad_test, Fs);
 
         for n_side = 1:length(cfg.trf.sides)
             side_label = cfg.trf.sides{n_side};
             picks      = side_map.(side_label);
             
             % Train
-            this_CM = CMtemp;
-            
+            this_CM = CMtemp;    
             for n_ref = 1:length(CMtemp.ref)
                 this_CM.ref(n_ref).chan = CMtemp.ref(n_ref).chan(:, to_keep_train);
             end
-            this_CM.ref = this_CM.ref(refs_keep);
-
-            this_CM     = CM_TRF_MEEG_train(this_CM, ...
-                                            this_bad_train(to_keep_train), ...
-                                            data(picks, to_keep_train));
             
-            % Test QUESTION
-            this_CM = rmfield(this_CM, {'tdeb' 'tfin'});
-
-            this_idx = 0
+            this_CM.ref = this_CM.ref(refs_keep);
+            
+            this_CM     = CM_TRF_MEEG_train(this_CM, ...
+                                             this_bad_train(to_keep_train), ...
+                                              data(picks, to_keep_train));
+            
+            % Test
+            this_CM  = rmfield(this_CM, {'tdeb' 'tfin'});
+            this_idx = 0;
             for n_ref = refs_keep
                 this_idx = this_idx + 1;
                 this_CM.ref(this_idx).chan = CMtemp.ref(n_ref).chan(:, to_keep_test);
             end
-            if broad phrasal label -> 
-                ones
+
+            % Weight vector
+            if strcmp(band.label, 'phrasal_broad')
+                w_test = ones(1, length(to_keep_test));
             else
-                maskspeech
+                w_test = speak_time(to_keep_test);
             end
-    
+
+            this_CM = CM_TRF_MEEG_test(this_CM, ...
+                                            this_bad_test(to_keep_test), ...
+                                             data(picks, to_keep_test), ...
+                                              w_test);
     
             if n_set == 1 && n_type == 1 && n_side == 1
                 CMfwd = this_CM;
@@ -240,4 +226,15 @@ for n_type = 1:length(cfg.trf.freq_bands)
     end  % n_set
 end  % % n_type
 
+end
+
+% --- Helper function ---
+function idx = get_clean_indices(bad_vec, Fs)
+    tmp = diff([1 bad_vec 1]);
+    debs = find(tmp == -1); fins = find(tmp == 1) -1;
+    keep = zeros(size(bad_vec));
+    for n = 1:length(debs)
+        keep(max(debs(n) - round(4*Fs), 1) : min(fins(n) + round(4 * Fs), length(bad_vec))) = 1;
+    end
+    idx = find(keep);
 end
