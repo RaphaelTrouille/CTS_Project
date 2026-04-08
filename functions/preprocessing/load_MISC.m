@@ -1,4 +1,4 @@
-function MISC = load_MISC(file, perm_stat)
+function [raw, MISC] = load_MISC(file, perm_stat)
 % LOAD_MISC  Load a MISC (miscellaneous) channel from a MEG recording file.
 %
 % DESCRIPTION:
@@ -56,7 +56,7 @@ if strcmp(extension, '.fif')
         MISC.signal = fiff_read_raw_segment(raw, 0, inf, picks_misc);
     end
 
-elseif strcmp(extension, '.cnt')
+elseif strcmp(extension, '.cnt') % To verify/update
 
     % Load .cnt file via FieldTrip preprocessing
     cfg = [];

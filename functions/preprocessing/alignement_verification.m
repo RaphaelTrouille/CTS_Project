@@ -76,8 +76,9 @@ function [t1, t2, L, gof] = alignement_verification(tds, dec, MISC_struct, audio
     Yds = Yf(tds);
     
     % Compute aligned overlap segment accounting for temporal offset dec
-    L = min(length(MISC_struct.signal) - max(dec, 0),...
-            length(Yds) + max(-dec, 0));
+    L = min(length(MISC_struct.signal) - dec*(dec>0), ...
+            length(Yds) +  dec*(dec<0));
+
     t1 = max(dec, 0)+(1:L);
     t2 = max(-dec, 0)+(1:L);
 

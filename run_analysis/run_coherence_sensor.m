@@ -16,7 +16,7 @@ function CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg)
 %   bad    - Binary artefact mask (1 x N); 1 = artefact, 0 = clean
 %   n_vid  - Current video/trial index (used for epoch equalisation logic)
 %   n_cond - Current condition index
-%   cfg    - Pipeline configuration struct (see config.m). Relevant fields:
+%   cfg    - Pipeline configuration struct (see cts_config.m). Relevant fields:
 %              .cm.equalize_nave : (bool) equalise epoch count across conditions
 %              .cm.n_rm          : (1 x Ncond) epochs to remove per condition
 %              .cm.equalize_vids : (1 x 2) [vid_index, max_cond] defining

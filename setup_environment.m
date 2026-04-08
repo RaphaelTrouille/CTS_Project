@@ -73,17 +73,23 @@ function [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment()
     
     % 4. Data related paths
     
-    %Internal
-    %meg_dir = fullfile(project_root, 'data', 'raw', 'meg');
-    %snd_dir = fullfile(project_root, 'data', 'audio', 'meg');
-    %vid_dir = fullfile(project_root, 'data', 'video');
-    
-    %External
-    external_root = '/Volumes/Elements/expe_SpeechTrack';
-    meg_dir = fullfile(external_root, 'meg');
-    snd_dir = fullfile(external_root, 'ready_stim');
-    vid_dir = fullfile(external_root, 'clean_vids');
-    deriv_dir = fullfile(project_root, 'data', 'derivatives', 'coherence');
+    internal = true;
+    if internal
+        %Internal
+        meg_dir = fullfile(project_root, 'data', 'raw', 'meg');
+        snd_dir = fullfile('/Volumes/Sauvegarde/ready_stim');
+        %snd_dir = fullfile(project_root, 'data', 'audio', 'meg');
+        vid_dir = fullfile('/Volumes/Sauvegarde/clean_vids');
+        %vid_dir = fullfile(project_root, 'data', 'video');
+    else
+        %External
+        external_root = '/Volumes/Elements/expe_SpeechTrack';
+        meg_dir = fullfile(external_root, 'meg');
+        snd_dir = fullfile(external_root, 'ready_stim');
+        vid_dir = fullfile(external_root, 'clean_vids');
+    end
+
+    deriv_dir = fullfile(project_root, 'data', 'derivatives');
     
     if ~exist(meg_dir, 'dir')
         warning('MEG data folder not found: %s', meg_dir);

@@ -1,4 +1,4 @@
-function [CM, bad] = prepare_CM_data(CM, dec, L, file)
+function [CM, bad] = prepare_CM_data(CM, dec, L, raw, file)
 % PREPARE_CM_DATA  Load and prepare MEG/EEG data into a CM structure for
 %                  cortical mapping analysis.
 %
@@ -12,6 +12,7 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
 %   CM    - CM structure to populate (must already exist)
 %   dec   - Temporal offset in samples (from realignment). Positive = MEG leads audio.
 %   L     - Desired analysis segment length in samples
+%   raw   - Raw structure extracted from fiff_setup_read_raw()
 %   file  - Full path to the raw data file (.fif or .cnt)
 %
 % OUTPUTS:
@@ -87,7 +88,7 @@ function [CM, bad] = prepare_CM_data(CM, dec, L, file)
     
     elseif strcmp(extension, '.fif')
         % --- MEG: read metadata via FIFF routines ---
-        raw = fiff_setup_read_raw(file);
+        %raw = fiff_setup_read_raw(file);
         Fs = double(raw.info.sfreq);
         
         % Store timing metadata

@@ -19,15 +19,15 @@ function cfg = cts_config()
 % -------------------------------------------------------------------------
 % Enable one or more analysis types. Each enabled analysis will run in
 % sequence for every subject/trial/condition.
-
-cfg.analysis.coherence  = false;     % Cortical coherence (CM toolbox)
-cfg.analysis.TRF        = true;    % Temporal Response Function (mTRF toolbox)
+cfg.analysis.name       = 'TRF';    % Name of the analysis (used for matfile name)
+cfg.analysis.coherence  = false;    % Cortical coherence (CM toolbox)
+cfg.analysis.TRF        = true;     % Temporal Response Function (mTRF toolbox)
 cfg.analysis.ERP        = false;    % Event-Related Potential / Evoked response
 
 %% 2. ANALYSIS SPACE
 % -------------------------------------------------------------------------
-cfg.space.sensor = false;
-cfg.space.source = true;
+cfg.space.sensor = true;
+cfg.space.source = false;
 
 %% 3. PERMUTATION STATISTICS
 % -------------------------------------------------------------------------
@@ -111,13 +111,13 @@ cfg.cm.equalize_vids  = [2,  4;  % vid2: equalise if n_cond <= 4
 
 %% 8. TRF PRAMETERS
 % -------------------------------------------------------------------------
-cfg.trf.n_folds       = 10;
-cfg.trf.refs_keep     = [1 2 3 4];
+cfg.trf.n_folds       = 5;
+cfg.trf.refs_keep     = 2;
 
 cfg.trf.att_ref_index = find(strcmp(cfg.ref_sources(:,1), 'attended speech'));
 
 cfg.trf.cond_sets = {[1 2] [3 4] [5 6] [7 8] [9 10] ...
-                     [1 3] [2 4] [5 7] [6 8] [9 10]};
+                     [1 3] [2 4] [5 7] [6 8] [9 10]};       % A vérifier comprendre
 
 cfg.trf.sides = {'left', 'right', 'both'};  % possible subsets ('left', 'right', 'both')
 
@@ -126,10 +126,10 @@ trf_fwd = {
 %  label               band        width     ds   t_pre  t_post  t_buff  lambda
   'phrasal_broad',   [0.2 1.5],  [0.2 0.5],  50,  -1000,  2000,   500,   2.^(-10:0);
   'syllabic',        [2   8  ],  [1   2  ],  10,   -100,   500,   100,   2.^(-10:0);
-  'phrasal_narrow',  [0.1 0.5],  [0.1 0.2],  50,  -1000,  2000,   500,   2.^(-10:0);
-  'syllabic_narrow', [2   4  ],  [0.5 1  ],  20,   -500,  1000,   200,   2.^(-10:0);
-  'delta_theta',     [0.2 4  ],  [0.1 1  ],  20,  -1000,  2000,   500,   2.^(-10:0);
-  'theta',           [4   8  ],  [1   2  ],  10,   -100,   500,   100,   2.^(-10:0);
+  %'phrasal_narrow',  [0.1 0.5],  [0.1 0.2],  50,  -1000,  2000,   500,   2.^(-10:0);
+  %'syllabic_narrow', [2   4  ],  [0.5 1  ],  20,   -500,  1000,   200,   2.^(-10:0);
+  %'delta_theta',     [0.2 4  ],  [0.1 1  ],  20,  -1000,  2000,   500,   2.^(-10:0);
+  %'theta',           [4   8  ],  [1   2  ],  10,   -100,   500,   100,   2.^(-10:0);
 };
 
 fields = {'label','band','width','ds','t_pre','t_post','t_buff','lambda'};
@@ -205,5 +205,5 @@ cfg.conditions(9).target = [0; 0; 0; 0];
 %% . PIPELINE BEHAVIOUR
 % -------------------------------------------------------------------------
 cfg.expected_trials   = 4;      % Expected number of trials per subject
-cfg.overwrite_results = false;  % false = skip subject if result file already exists
+cfg.overwrite_results = true;  % false = skip subject if result file already exists
 cfg.verbose           = true;   % true = print progress to console

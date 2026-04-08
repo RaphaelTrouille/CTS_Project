@@ -20,8 +20,8 @@
 %   3. Summary & Save the results
 %
 % TO ADD A NEW ANALYSIS:
-%   1. Add cfg.analysis.my_analysis = true/false in config.m
-%   2. Add parameters in config.m
+%   1. Add cfg.analysis.my_analysis = true/false in cts_config.m
+%   2. Add parameters in cts_config.m
 %   3. Implement run_my_analysis(CM, bad, cfg) at the bottom of this file
 %   4. Add an elseif block in Section D below
 %
@@ -29,6 +29,7 @@
 
 %% 0. ENVIRONMENT & CONFIGURATION
 % -------------------------------------------------------------------------
+clear; clc;
 [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment();
 cfg = cts_config();     % Loads cfg struct - edit config.m to change all parameters
 
@@ -63,11 +64,11 @@ for perm_stat = perm_passes
         % -----------------------------------------------------------------
         % 1.2 OUTPUT PATH & SKIP LOGIC
         % -----------------------------------------------------------------        
-        mat_path  = fullfile(deriv_dir, 'results', sub_name);
+        mat_path  = fullfile(deriv_dir, sub_name);
         if ~exist(mat_path, 'dir'), mkdir(mat_path); end
 
         suffix    = iif(perm_stat, '_perm', '_main');
-        save_file = fullfile(mat_path, [sub_name '_CTS_results' suffix '.mat']);
+        save_file = fullfile(mat_path, [sub_name '_' cfg.analysis.name suffix '.mat']);
 
         if ~cfg.overwrite_results && exist(save_file, 'file')
             log_msg(cfg, '%s [SKIP] %s - result file already exists.\n', perm_label, sub_name)
@@ -110,6 +111,7 @@ for perm_stat = perm_passes
                 'sensors',   [], ...
                 'Fs',        0);
         end
+
         %% 2. TRIAL LOOP
         % =================================================================
         for n_vid = 1:length(vids)
@@ -129,7 +131,7 @@ for perm_stat = perm_passes
             %% A. DATA LOADING & ALIGNMENT
             % -------------------------------------------------------------
             Yglb     = load_WAV_audio(subj_files.snd_global);
-            MISCorig = load_MISC(subj_files.meg_file, perm_stat);
+            [raw, MISCorig] = load_MISC(subj_files.meg_file, perm_stat);
 
             % Sanity check: audio duration must match theoretical timings
             if abs(t(end) - length(Yglb.signal) / Yglb.Fs) > 0.1
@@ -200,47 +202,14 @@ for perm_stat = perm_passes
             % CM.last_samp — everything CM_coh_MEG_ref_one_pass needs
             % to read the raw data itself. It also builds the bad mask.
 
-            [CM, bad] = prepare_CM_data(CM, dec, L, subj_files.meg_file);
+            [CM, bad] = prepare_CM_data(CM, dec, L, raw, subj_files.meg_file);
 
             % Flag distractor/singing segments as artefacts
             bad = flag_distractor_segments(bad, t_dis, tds, dec, MISCorig.Fs);
 
             if cfg.analysis.TRF
-            % Assign each sample to a cross-val fold (1-10), 0 = unassigned
-            % Reproduces the original randperm logic from config_speechtrack:
-            %   - for each of the 10 cond indices, find which temporal windows match
-            %   - if multiple windows match, draw one randomly (randperm)
-            %   - cond 10 reuses the 2nd draw from cond 9's randperm
-                this_cond_ind = zeros(size(bad));
-                n_t_sav       = [];
-                this_order    = [];
-                
-                for n_fold = 1:cfg.trf.n_folds
-                    if n_fold == cfg.trf.n_folds
-                        n_t = n_t_sav(this_order(2));   % Reuse 2nd pick from previous randperm
-                    else
-                        n_t = find(~any(bsxfun(@minus, cfg.conditions(n_fold).target, vid_en_in_SiN)));
-                        this_order = randperm(length(n_t));
-                        n_t_sav    = n_t;
-                        n_t        = n_t_sav(this_order(1));
-                    end
-                    t_start = max(dec + round( t(n_t)    * MISCorig.Fs + 1), 1);
-                    t_end   = min(dec + round( t(n_t+1)  * MISCorig.Fs), length(bad));
-                    this_cond_ind(t_start:t_end) = n_fold;
-                end
-
-                % Read sensors struct (needed by run_TRF_sensor to build
-                % picks_sens
-                raw_trf = fiff_setup_read_raw(subj_files.meg_file);
-                sensors_trf = get_sensors(raw_trf);
-
-                % Accumulate into buffer
-                trf_buf.meg_files{end+1} = subj_files.meg_file;
-                trf_buf.bad              = [trf_buf.bad, bad];
-                trf_buf.cond_ind         = [trf_buf.cond_ind, this_cond_ind];
-                trf_buf.refs{end+1}      = CM.ref;
-                trf_buf.sensors          = sensors_trf;     % overwritten each trial (same sensors)
-                trf_buf.Fs               = MISCorig.Fs;
+                trf_buf = fill_trf_buffer(trf_buf, cfg, bad, vid_en_in_SiN, ...
+                                     t, dec, MISCorig, CM, raw, subj_files);
             end
 
 
@@ -262,7 +231,7 @@ for perm_stat = perm_passes
                 % ---------------------------------------------------------
                 % ANALYSIS DISPATCH
                 % To add a new analysis: implement run_X(CM, bad, cfg) below
-                % and add an elseif block here.
+                % and add an 'if' block here.
                 % ---------------------------------------------------------
                 
                 % COHERENCE ANALYSIS
@@ -271,26 +240,22 @@ for perm_stat = perm_passes
                     CM.tdeb = CM.first_samp + max(dec + t(n_t) * MISCorig.Fs, 0);
                     CM.tfin = CM.first_samp + min(dec + t(n_t+1) * MISCorig.Fs, ...
                                                   CM.last_samp - CM.first_samp);
-                    CMall = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg);
+                    
+                    CMall   = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg);
                     if cfg.space.source
-                        run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg);
+                    CMall   = run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg);
                     end
-                
-                else
-                    log_msg(cfg, '  [WARNING] No active analysis matched - check config.m\n');
-                    continue
                 end
-   
             end % conds loop
    
         end  % trials loop
 
         % TRF ANALYSIS - computed once per subject after all trials are stacked
         if cfg.analysis.TRF && cfg.space.sensor && ~isempty(trf_buf.meg_files)
-            log_msg(cfg, '  [TRF] Runningforward TRF sensor for %s...\n', sub_name);
-            CMfwd = run_TRF_sensor(trf_buf, cfg);
+            log_msg(cfg, '  [TRF] Running forward TRF sensor for %s...\n', sub_name);
+            CMall = run_TRF_sensor(trf_buf, cfg);
         else
-            CMfwd = [];
+            CMall = [];
         end
 
         %% 3. SAVE RESULTS
@@ -318,7 +283,7 @@ for perm_stat = perm_passes
             end
 
             gof_align = gof(n_sub, :);
-            save(save_file, 'CMall', 'surrog', 'gof_align','CMfwd', 'cfg');  % CHECKER SI IL VAUT MIEUX PAS ACCORDER AVEC CONDITIONS
+            save(save_file, 'CMall', 'surrog', 'gof_align', 'cfg');  % CHECKER SI IL VAUT MIEUX PAS ACCORDER AVEC CONDITIONS
             log_msg(cfg, '  [SAVED] %s\n', save_file);
         else
             log_msg(cfg, '  [WARNING] CMall is empty — nothing saved for %s.\n', sub_name);

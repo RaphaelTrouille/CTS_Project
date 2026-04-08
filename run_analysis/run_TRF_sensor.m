@@ -104,7 +104,7 @@ cond_ind = trf_buf.cond_ind;
 % Reserved for backward mapping - not used in forward pass.
 att_idx            = cfg.trf.att_ref_index;
 realenv            = Yenv(att_idx, :);
-realenv(realenv == 0) = Nan;
+realenv(realenv == 0) = NaN;
 thlow              = prctile(realenv, 5) * 5;
 realenv(isnan(realenv)) = 0;
 deb                = find(diff(realenv < thlow) == 1) + 1;
@@ -134,7 +134,7 @@ side_map   = struct('left', picksleft, 'right', picksright, 'both', 1:size(data,
 refs_keep = cfg.trf.refs_keep;
 CMfwd     = [];
 
-for n_type = 1:length(cfg.trf.freq_bands)
+for n_type = 1:length(cfg.trf.fwd_bands)
     band = cfg.trf.fwd_bands(n_type);
     log_msg(cfg, '  [TRF] Band %d/%d: %s\n', n_type, length(cfg.trf.fwd_bands), band.label);
 
@@ -151,12 +151,13 @@ for n_type = 1:length(cfg.trf.freq_bands)
     CMtemp.t_post       = band.t_post;
     CMtemp.t_buff       = band.t_buff;
     CMtemp.lambda       = band.lambda;
+    CMtemp.label        = raw.info.ch_names();
 
     % Assign normalised reference signals to CM template
     for n_ref = 1:Nrefs
         sig = Yenv(n_ref, :);
         sig = sig - mean(sig);
-        sig = sig / max(std(sig));
+        sig = sig / std(sig);
         CMtemp.ref(n_ref).chan = sig;
         CMtemp.ref(n_ref).info = trf_buf.refs{1}(n_ref).info;
         CMtemp.ref(n_ref).filt = [];
@@ -183,7 +184,8 @@ for n_type = 1:length(cfg.trf.freq_bands)
             picks      = side_map.(side_label);
             
             % Train
-            this_CM = CMtemp;    
+            this_CM = CMtemp;   
+            this_CM.label = raw.info.ch_names(picks);
             for n_ref = 1:length(CMtemp.ref)
                 this_CM.ref(n_ref).chan = CMtemp.ref(n_ref).chan(:, to_keep_train);
             end
