@@ -1,8 +1,8 @@
 function cfg_plot = plot_config()
-cfg_plot.cond = 1;
-cfg_plot.band = 1;
+cfg_plot.cond = [1 2 3];
+cfg_plot.band = 2;
 cfg_plot.side = 3;
-cfg_plot.ref  = 2;
+cfg_plot.ref  = 4;
 
 cfg_plot.save = true;
 cfg_plot.save_dir = fullfile(pwd, 'results', 'figures');

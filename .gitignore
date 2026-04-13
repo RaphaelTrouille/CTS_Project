@@ -3,3 +3,5 @@ functions/analysis/
 *.asv
 .DS_Store
 functions/visualization/results/
+*.fig
+*.png
