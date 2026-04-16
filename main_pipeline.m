@@ -33,6 +33,25 @@ clear; clc;
 [meg_dir, subjects, deriv_dir, snd_dir, vid_dir] = setup_environment();
 cfg = cts_config();     % Loads cfg struct - edit config.m to change all parameters
 
+% Can be done function to secure name is according to analysis enabled and only 1 analysis 
+% Validate analysis selection
+analysis_flags = { ...
+    'coherence', ...
+    'TRF', ...
+    'ERP' ...
+    };
+
+n_active = 0;
+
+for i = 1:length(analysis_flags)
+    n_active = n_active + logical(cfg.analysis.(analysis_flags{i}));
+end
+
+if n_active > 1
+    error(['Only one analysis can be enabled at a time. ' ...
+           'Please select only one of: coherence, TRF, ERP.']);
+end
+
 % Pre-compute MEL center frequencies (shared across all subjects/trials)
 cf = get_mel_freqs(cfg.freq.mel_low, cfg.freq.mel_high, cfg.freq.mel_bands);
 
@@ -68,12 +87,21 @@ for perm_stat = perm_passes
         if ~exist(mat_path, 'dir'), mkdir(mat_path); end
 
         suffix    = iif(perm_stat, '_perm', '_main');
-        save_file = fullfile(mat_path, [sub_name '_' cfg.analysis.name suffix '.mat']);
+        save_file = fullfile(mat_path, [sub_name '_' cfg.analysis.name_pattern suffix '.mat']);
 
-        if ~cfg.overwrite_results && exist(save_file, 'file')
-            log_msg(cfg, '%s [SKIP] %s - result file already exists.\n', perm_label, sub_name)
+        sensor_done = ~cfg.overwrite_results && exist(save_file, 'file');
+
+        if sensor_done && ~(cfg.analysis.coherence && cfg.space.source)
+            log_msg(cfg, '%s [SKIP] %s - result file already exists.\n', perm_label, sub_name);
             continue
+
+        elseif sensor_done && cfg.analysis.coherence && cfg.space.source
+            log_msg(cfg, '%s [SKIP SENSOR] %s - loading existing CMall for source projection.\n', perm_label, sub_name);
+            tmp = load(save_file, 'CMall', 'cfg');
+            run_coherence_source(tmp.CMall, sub_name, perm_stat, tmp.cfg);
+            continue  % No need to enter trials loop
         end
+       
 
         log_msg(cfg, '\n%s [%d/%d] Processing: %s\n', perm_label, n_sub, length(subjects), sub_name);
 
@@ -170,7 +198,7 @@ for perm_stat = perm_passes
                         wav = load_WAV_audio(subj_files.snd_att);
                         Yp = lips_apperture(vid_dir, vids(n_vid), wav);
 
-                    case 'envelope'
+                    case 'custom'
                         % Pre-computed low-frequency signal - add loading
                         % logic here
                         log_msg(cfg, '  [WARNING] Envelope source "%s" needs custom loading - skipping.\n', ref_label);
@@ -242,20 +270,43 @@ for perm_stat = perm_passes
                                                   CM.last_samp - CM.first_samp);
                     
                     CMall   = run_coherence_sensor(CMall, CM, bad, n_vid, n_cond, cfg);
-                    if cfg.space.source
-                    CMall   = run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg);
-                    end
                 end
             end % conds loop
    
         end  % trials loop
-
-        % TRF ANALYSIS - computed once per subject after all trials are stacked
+        
+        %% TRF ANALYSIS
         if cfg.analysis.TRF && cfg.space.sensor && ~isempty(trf_buf.meg_files)
-            log_msg(cfg, '  [TRF] Running forward TRF sensor for %s...\n', sub_name);
-            CMall = run_TRF_sensor(trf_buf, cfg);
-        else
-            CMall = [];
+
+            log_msg(cfg,'  [TRF] Running forward TRF sensor for %s...\n',sub_name);
+            CMall = run_TRF_sensor(trf_buf,cfg);
+
+        end
+       
+        %% SOURCE COHERENCE ANALYSIS
+        if cfg.analysis.coherence && cfg.space.source
+        
+            % Case 1 : sensor just bein computed in this run
+            if cfg.space.sensor && ~isempty(CMall) && isfield(CMall(1), 'CSD')
+                log_msg(cfg, '  [COHERENCE] Running coherence source for %s...\n', sub_name);
+                run_coherence_source(CMall, sub_name, perm_stat, cfg);
+        
+            % Case 2 : load CMall pre-computed from .mat file
+            elseif ~cfg.space.sensor
+                suffix_load = iif(perm_stat, '_perm', '_main');
+                load_file   = fullfile(deriv_dir, sub_name, [sub_name '_' cfg.analysis.name_pattern suffix_load '.mat']);
+                if exist(load_file, 'file')
+                    log_msg(cfg, '  [COHERENCE] Loading pre-computed CMall for source: %s\n', load_file);
+                    tmp   = load(load_file, 'CMall', 'cfg');
+                    run_coherence_source(tmp.CMall, sub_name, perm_stat, tmp.cfg);
+                else
+                    log_msg(cfg, '  [WARNING] No CMall found for source projection: %s\n', load_file);
+                end
+        
+            else
+                log_msg(cfg, '  [WARNING] CMall empty or missing CSD — source skipped for %s.\n', sub_name);
+            end
+        
         end
 
         %% 3. SAVE RESULTS
@@ -266,12 +317,6 @@ for perm_stat = perm_passes
             % array (surrog) indexed by [condition x trial], and clear them
             % from CMall to keep the saved file compact.
         if ~isempty(CMall)
-
-            % Extract surrogate statistics from CMall before saving.
-            % CM_coh_MEG_ref_one_pass stores surrogate results in CMall.surrog
-            % when CM.surrog is defined. Here we pull them out into a separate
-            % array (surrog) indexed by [condition x trial], and clear them
-            % from CMall to keep the saved file compact.
             surrog = [];
             if isfield(CMall(1), 'surrog')
                 for s1 = 1:size(CMall, 1)

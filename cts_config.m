@@ -19,15 +19,15 @@ function cfg = cts_config()
 % -------------------------------------------------------------------------
 % Enable one or more analysis types. Each enabled analysis will run in
 % sequence for every subject/trial/condition.
-cfg.analysis.name       = 'TRF';    % Name of the analysis (used for matfile name)
-cfg.analysis.coherence  = false;    % Cortical coherence (CM toolbox)
-cfg.analysis.TRF        = true;     % Temporal Response Function (mTRF toolbox)
-cfg.analysis.ERP        = false;    % Event-Related Potential / Evoked response
+cfg.analysis.name_pattern       = 'coherence';    % Name of the analysis (used for matfile name)
+cfg.analysis.coherence  = true;        % Cortical coherence (CM toolbox)
+cfg.analysis.TRF        = false;         % Temporal Response Function (mTRF toolbox)
+cfg.analysis.ERP        = false;        % Event-Related Potential / Evoked response
 
 %% 2. ANALYSIS SPACE
 % -------------------------------------------------------------------------
-cfg.space.sensor = true;
-cfg.space.source = false;
+cfg.space.sensor = false;
+cfg.space.source = true;
 
 %% 3. PERMUTATION STATISTICS
 % -------------------------------------------------------------------------
@@ -111,13 +111,58 @@ cfg.cm.equalize_vids  = [2,  4;  % vid2: equalise if n_cond <= 4
 
 %% 8. TRF PRAMETERS
 % -------------------------------------------------------------------------
-cfg.trf.n_folds       = 5;
-cfg.trf.refs_keep     = 2;
+cfg.trf.n_folds       = 10;
+cfg.trf.refs_keep     = [2 4];
 
 cfg.trf.att_ref_index = find(strcmp(cfg.ref_sources(:,1), 'attended speech'));
 
-cfg.trf.cond_sets = {[1 2] [3 4] [5 6] [7 8] [9 10] ...
-                     [1 3] [2 4] [5 7] [6 8] [9 10]};       % A vérifier comprendre
+cfg.trf.cond_sets = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, ...   % folds 1-10 (un par condition)
+                     1:10, ...                               % all
+                     1:8,  ...                               % SiN
+                     9:10, ...                               % noiseless
+                     [1 3 5 7], ...                          % nV
+                     [2 4 6 8], ...                          % V
+                     [1 2 5 6], ...                          % nE
+                     [3 4 7 8], ...                          % E
+                     [1 2 3 4], ...                          % nI
+                     [5 6 7 8], ...                          % I
+                     [1 5], [2 6], [3 7], [4 8], ...         % nV_nE, V_nE, nV_E, V_E
+                     [1 3], [2 4], [5 7], [6 8], ...         % nV_nI, V_nI, nV_I, V_I
+                     [1 2], [3 4], [5 6], [7 8], ...         % nE_nI, E_nI, nE_I, E_I
+                     9, 10};                                 % noiseless individuels
+
+cfg.trf.cond_sets_name = {'nV_nE_nI'...     % 1
+                          'V_nE_nI'...      % 2
+                          'nV_E _nI' ...    % 3
+                          'V_E _nI' ...     % 4
+                          'nV_nE_I' ...     % 5
+                          'V_nE_I' ...      % 6
+                          'nV_E_I' ...      % 7
+                          'V_E_I' ...       % 8
+                          'noiseless1' ...  % 9
+                          'noiseless2' ...  % 10
+                          'all' ...         % 11
+                          'SiN' ...         % 12
+                          'noiseless' ...   % 13
+                          'nV' ...          % 14
+                          'V' ...           % 15
+                          'nE' ...          % 16
+                          'E' ...           % 17
+                          'nI' ...          % 18
+                          'I' ...           % 19
+                          'nV_nE' ...       % 20
+                          'V_nE' ...        % 21
+                          'nV_E' ...        % 22
+                          'V_E' ...         % 23
+                          'nV_nI' ...       % 24
+                          'V_nI' ...        % 25
+                          'nV_I' ...        % 26
+                          'V_I' ...         % 27
+                          'nE_nI' ...       % 28
+                          'E_nI' ...        % 29
+                          'nE_I' ...        % 30
+                          'E_I'};           % 31
+
 
 cfg.trf.sides = {'left', 'right', 'both'};  % possible subsets ('left', 'right', 'both')
 
@@ -145,12 +190,13 @@ end
 cfg.beam.n_sensors    = 306;    % Number of MEG sensors
 cfg.beam.ref_index    = 2;      % Reference signal index for CSD (2 = attended speech)
 cfg.beam.dxyz         = 1;      % Source grid spacing (mm)
-cfg.beam.fold_fs      = 'MSI-CTS'; % FreeSurfer folder name for overlays
+cfg.beam.fold_fs      = 'ST-5'; % FreeSurfer folder name for overlays
  
 % Forward solution path — use {sub_name} as placeholder for subject name
-cfg.beam.fwd_file     = '/path/to/subjects/{sub_name}/meg/{sub_name}_from_MNI-MSI-CTS-5-src-fwd.fif';
-cfg.beam.subjects_dir = '/path/to/freesurfer/subjects';
-cfg.beam.group_fold   = '/path/to/subjects/group_CTS';
+cfg.beam.fwd_file     = '/Volumes/Sauvegarde/subjects/{sub_name}/meg/{sub_name}_from_MNI-ST-5-src-fwd.fif';
+%cfg.beam.subjects_dir = '/Volumes/Elements/expe_SpeechTrack/subjects/';
+cfg.beam.subjects_dir = '/Volumes/Sauvegarde/subjects';
+cfg.beam.group_fold   = 'test';
  
 % Frequency bands for source projection
 % Each entry needs: .label (string) and .Find (frequency indices into CM.f)
@@ -205,5 +251,5 @@ cfg.conditions(9).target = [0; 0; 0; 0];
 %% . PIPELINE BEHAVIOUR
 % -------------------------------------------------------------------------
 cfg.expected_trials   = 4;      % Expected number of trials per subject
-cfg.overwrite_results = true;  % false = skip subject if result file already exists
+cfg.overwrite_results = false;   % false = skip subject if result file already exists
 cfg.verbose           = true;   % true = print progress to console

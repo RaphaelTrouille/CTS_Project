@@ -1,4 +1,4 @@
-function run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg)
+function run_coherence_source(CMall, sub_name, perm_stat, cfg)
 % RUN_COHERENCE_SOURCE  Project sensor-space coherence results to source
 %                       space using DICS beamforming for one condition.
 %
@@ -16,7 +16,6 @@ function run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg)
 %   CMall     - Accumulated sensor-space coherence results (1 x Ncond).
 %               Must contain .CSD, .f, .Fs, .quantum, and .infile fields.
 %               (requires CM.CSD = [] at init_CM time to trigger CSD computation)
-%   n_cond    - Index of the condition to project (into CMall)
 %   sub_name  - Subject identifier string (e.g. 'Meg3877')
 %   perm_stat - Boolean; if true, appends '_perm_stat' to output filenames
 %   cfg       - Pipeline configuration struct. Relevant fields:
@@ -54,28 +53,40 @@ function run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg)
 %   - iif                        (custom)
 %
 % USAGE:
-%   run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg);
+%   run_coherence_source(CMall, sub_name, perm_stat, cfg);
 %
 % =========================================================================
     Nsens = cfg.beam.n_sensors;  % Number of MEG sensors (default 306)
      
-    %% 1. SENSOR-SPACE COHERENCE (with CSD)
-    % CM.CSD must be initialized to [] in init_CM for CSD to be computed
-    CM_cond = CMall(n_cond);
-     
-    %% 2. NOISE COVARIANCE FROM CSD ACROSS ALL CONDITIONS
+    %% 1. NOISE COVARIANCE FROM CSD ACROSS ALL CONDITIONS
     % Average CSD across all conditions and frequencies >= 1 Hz as noise estimate
     COVnoise = real(cat(4, CMall.CSD));
-    f_idx    = find(CM_cond.f >= 1);
+    f_idx    = find(CMall(1).f >= 1);
     COVnoise = mean(mean(COVnoise(1:Nsens, 1:Nsens, f_idx, :), 3), 4);
      
-    %% 3. FORWARD SOLUTION — SVD REDUCTION TO 2 ORIENTATIONS PER SOURCE
+    %% 2. FORWARD SOLUTION — SVD REDUCTION TO 2 ORIENTATIONS PER SOURCE
     % Build subject-specific forward solution path
-    fwdfile = strrep(cfg.beam.fwd_file, '{sub_name}', sub_name);
-    fwd     = mne_read_forward_solution(fwdfile);
-     
+    try
+        fwdfile = strrep(cfg.beam.fwd_file, '{sub_name}', sub_name);
+        fwd     = mne_read_forward_solution(fwdfile);
+    catch
+        pattern = strrep(cfg.beam.fwd_file, '{sub_name}', [sub_name '_from_*']);
+        files = dir(pattern);
+    
+        if ~isempty(files)
+            % Find the first file found then reconstruct path
+            fwdfile  = fullfile(files(1).folder, files(1).name);
+            fwd      = mne_read_forward_solution(fwdfile);
+            % New name
+            parts    = split(fwdfile, '/');
+            idx      = contains(parts, [sub_name '_from']) ;
+            sub_name = parts{find(idx, 1, 'first')};
+        else
+            error('Impossible de trouver le forward file, même avec le suffixe _from*.');
+        end
+    end
     % Read sensor info to get gradiometer picks
-    raw     = fiff_setup_read_raw(CM_cond.infile);
+    raw     = fiff_setup_read_raw(CMall(1).infile{1});
     sensors = get_sensors(raw);
      
     % Reduce each source dipole to its 2 dominant orientations via SVD
@@ -93,47 +104,65 @@ function run_coherence_source(CMall, n_cond, sub_name, perm_stat, cfg)
     fwd.source_nn(1:3:end, :) = [];
     fwd.nchan      = length(sensors.picksgrads);
      
-    %% 4. MNE INVERSE OPERATOR
+    %% 3. MNE INVERSE OPERATOR
     CM_inv          = MNE_inverse_MEEG(fwd, COVnoise(sensors.picksgrads, sensors.picksgrads));
     CM_inv.fwdfile  = fwdfile;
      
-    %% 5. SOURCE PROJECTION PER FREQUENCY BAND
-    for n_band = 1:length(cfg.beam.freq_bands)
-        band  = cfg.beam.freq_bands(n_band);
-        Find  = band.Find;
-        ref   = cfg.beam.ref_index;  % Reference signal index (default 2 = attended speech)
-     
-        % Build CSD structure for this frequency band
-        CM_CSD       = [];
-        CM_CSD.Fs    = CM_cond.Fs;
-        CM_CSD.F     = (Find - 1) * CM_CSD.Fs / CM_cond.quantum;
-        CM_CSD.Find  = Find;
-        CM_CSD.bads  = [];
-        CM_CSD.CSD   = CM_cond.CSD([sensors.picksgrads, Nsens+ref], ...
-                                   [sensors.picksgrads, Nsens+ref], Find);
-     
-        % Build output parameters
-        param              = [];
-        exp_label          = [sub_name '_' cfg.conditions(n_cond).label '_' band.label];
-        param.exp          = iif(perm_stat, [exp_label '_perm_stat'], exp_label);
-        param.fold_fs      = cfg.beam.fold_fs;
-        param.subjects_dir = cfg.beam.subjects_dir;
-        param.subject      = sub_name;
-        param.dxyz         = cfg.beam.dxyz;
-        param.w            = 1;  % Do not normalise back to MRI
-     
-        % Run DICS source projection
-        CM_DICS_MEEG(param, CM_inv, CM_CSD);
-     
-        %% 6. MOVE OVERLAYS TO GROUP FOLDER
-        sub_fold   = fullfile(cfg.beam.subjects_dir, sub_name, param.fold_fs);
-        group_fold = fullfile(cfg.beam.group_fold, cfg.conditions(n_cond).label, band.label);
-        if perm_stat
-            group_fold = fullfile(group_fold, 'perm_stat');
-        end
-        if ~exist(group_fold, 'dir')
-            mkdir(group_fold);
-        end
-        unix(['mv ' fullfile(sub_fold, ['w' param.exp '*']) ' ' group_fold]);
-    end
+    %% 4. SOURCE PROJECTION PER FREQUENCY BAND
+    for n_cond = 1:length(CMall)
+        CM_cond = CMall(n_cond);
+        for n_band = 1:length(cfg.beam.freq_bands)
+            band  = cfg.beam.freq_bands(n_band);
+            Find  = band.Find;
+            ref   = cfg.beam.ref_index;  % Reference signal index (default 2 = attended speech)
+         
+            % Build CSD structure for this frequency band
+            CM_CSD       = [];
+            CM_CSD.Fs    = CM_cond.Fs;
+            CM_CSD.F     = (Find - 1) * CM_CSD.Fs / CM_cond.quantum;
+            CM_CSD.Find  = Find;
+            CM_CSD.bads  = [];
+            CM_CSD.CSD   = CM_cond.CSD([sensors.picksgrads, Nsens+ref], ...
+                                       [sensors.picksgrads, Nsens+ref], Find);
+         
+            % Build output parameters
+            param              = [];
+            exp_label          = [sub_name '_' cfg.conditions(n_cond).label '_' band.label];
+            param.exp          = iif(perm_stat, [exp_label '_perm_stat'], exp_label);
+            param.fold_fs      = cfg.beam.fold_fs;
+            param.subjects_dir = cfg.beam.subjects_dir;
+            param.subject      = sub_name;
+            param.dxyz         = cfg.beam.dxyz;
+            param.w            = 1;  % Do not normalise back to MRI
+         
+            % Run DICS source projection
+            CM_DICS_MEEG(param, CM_inv, CM_CSD);
+         
+            %% 5. MOVE OVERLAYS TO GROUP FOLDER
+            sub_fold   = fullfile(cfg.beam.subjects_dir, sub_name, param.fold_fs);
+            group_fold = fullfile(cfg.beam.group_fold, cfg.conditions(n_cond).label, band.label);
+            if perm_stat
+                group_fold = fullfile(group_fold, 'perm_stat');
+            end
+            if ~exist(group_fold, 'dir')
+                mkdir(group_fold);
+            end
+            % 1. On définit le chemin source avec le joker
+            source = fullfile(sub_fold, ['w' param.exp '*']);
+            
+            % 2. On s'assure que le dossier de destination existe
+            if ~exist(group_fold, 'dir')
+                mkdir(group_fold);
+            end
+            
+            % 3. On utilise movefile
+            % Pas besoin de gérer les espaces manuellement, MATLAB s'en occupe !
+            [status, msg] = movefile(source, group_fold);
+            
+            % 4. Vérification d'erreur (optionnel mais recommandé)
+            if ~status
+                error('Erreur lors du déplacement : %s', msg);
+            end
+        end % Bands
+    end % Conditions
 end
